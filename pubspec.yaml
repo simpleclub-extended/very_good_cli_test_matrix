@@ -1,0 +1,9 @@
+name: very_good_cli_test_matrix_root
+publish_to: none
+environment:
+  sdk: ^3.9.0
+
+workspace:
+  - app
+  - app/packages/core/*
+  - app/packages/features/*

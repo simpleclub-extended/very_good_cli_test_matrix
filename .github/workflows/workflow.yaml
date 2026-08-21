@@ -1,0 +1,39 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  merge_group:
+    branches: [main]
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+env:
+  FLUTTER_VERSION: 3.44.0
+
+jobs:
+  test:
+    name: unit tests - app - ${{ matrix.package.name }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+
+      - name: Install dependencies
+        run: flutter pub get
+        working-directory: app/
+
+      - name: Install Very Good CLI
+        run: dart pub global activate very_good_cli
+
+      - name: Run app tests only
+        run: dart pub global run very_good_cli:very_good test --recursive --coverage
+        working-directory: app/

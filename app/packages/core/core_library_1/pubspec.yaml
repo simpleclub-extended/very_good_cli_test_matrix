@@ -1,0 +1,7 @@
+name: core_library_1
+publish_to: none
+resolution: workspace
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.0
