@@ -13,7 +13,7 @@ env:
 
 jobs:
   test:
-    name: unit tests - app - ${{ matrix.package.name }}
+    name: unit tests - app
     runs-on: ubuntu-latest
 
     steps:
