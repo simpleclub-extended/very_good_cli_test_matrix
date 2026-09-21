@@ -13,6 +13,22 @@ dependencies:
     path: packages/features/feature_a
   feature_b:
     path: packages/features/feature_b
+  feature_c:
+    path: packages/features/feature_c
+  feature_d:
+    path: packages/features/feature_d
+  feature_e:
+    path: packages/features/feature_e
+  feature_f:
+    path: packages/features/feature_f
+  feature_g:
+    path: packages/features/feature_g
+  feature_h:
+    path: packages/features/feature_h
+  feature_i:
+    path: packages/features/feature_i
+  feature_j:
+    path: packages/features/feature_j
 
 dev_dependencies:
   flutter_test:
