@@ -12,28 +12,123 @@ env:
   FLUTTER_VERSION: 3.44.0
 
 jobs:
-  test:
-    name: unit tests - app
+  detect-affected:
+    name: detect affected packages
     runs-on: ubuntu-latest
-
+    outputs:
+      matrix: ${{ steps.affected.outputs.matrix }}
+      has_affected: ${{ steps.affected.outputs.has_affected }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+          filter: blob:none
+
+      - name: Ensure base ref is available
+        run: |
+          set -euo pipefail
+
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            BASE="${{ github.event.before }}"
+            git fetch --no-tags --depth=1 origin "$BASE"
+          else
+            BASE_BRANCH="${{ github.base_ref || 'main' }}"
+            BASE="origin/${BASE_BRANCH}"
+            git fetch --no-tags origin \
+              "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}" \
+              --depth=1
+
+            rounds=0
+            max_rounds=8
+            deepen_by=50
+            until git merge-base "$BASE" HEAD >/dev/null 2>&1; do
+              rounds=$((rounds + 1))
+              if [ "$rounds" -gt "$max_rounds" ]; then
+                git fetch --no-tags --unshallow origin
+                break
+              fi
+              git fetch --no-tags --deepen="$deepen_by" origin
+            done
+          fi
 
       - name: Install Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          pub-cache: true
+
+      - name: Install Very Good CLI
+        run: dart pub global activate -sgit https://github.com/simpleclub-extended/very_good_cli.git --git-ref feat/workspace-matrix-command
+
+      - name: Detect affected workspace packages
+        id: affected
+        working-directory: app/
+        run: |
+          set -euo pipefail
+
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            BASE="${{ github.event.before }}"
+          else
+            BASE="origin/${{ github.base_ref || 'main' }}"
+          fi
+
+          RAW_OUTPUT=$(very_good workspace matrix --base "$BASE")
+          MATRIX_JSON=$(printf '%s\n' "$RAW_OUTPUT" | awk '/^\[.*\]$/{print; exit}')
+          if [ -z "$MATRIX_JSON" ]; then
+            echo "No JSON matrix found in Very Good CLI output."
+            exit 1
+          fi
+
+          echo "matrix=$MATRIX_JSON" >> "$GITHUB_OUTPUT"
+          if [ "$MATRIX_JSON" = "[]" ]; then
+            echo "has_affected=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_affected=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  test:
+    name: unit tests - app - ${{ matrix.package.name }}
+    needs: detect-affected
+    if: ${{ needs.detect-affected.outputs.has_affected == 'true' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJSON(needs.detect-affected.outputs.matrix) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+          pub-cache: true
 
       - name: Install dependencies
         run: flutter pub get
-        working-directory: app/
 
       - name: Install Very Good CLI
         run: dart pub global activate very_good_cli
 
-      - name: Run app tests only
-        run: dart pub global run very_good_cli:very_good test --recursive --coverage --no-optimization
-        working-directory: app/
+      - name: Run tests for package
+        working-directory: app/${{ matrix.package.path }}
+        run: dart pub global run very_good_cli:very_good test --coverage --no-optimization
+
+  ci-status:
+    name: unit tests - app
+    needs: [detect-affected, test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate aggregate matrix status
+        run: |
+          if [ "${{ needs.test.result }}" = "failure" ] || [ "${{ needs.detect-affected.result }}" = "failure" ]; then
+            echo "One or more package checks failed."
+            exit 1
+          fi
+          echo "All affected package tests passed successfully!"
