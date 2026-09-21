@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
+@Timeout(Duration(seconds: 330))
 void main() {
   test('slow fake suite 2', () async {
     await Future<void>.delayed(const Duration(seconds: 270));
