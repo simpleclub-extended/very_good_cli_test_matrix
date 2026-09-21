@@ -35,5 +35,5 @@ jobs:
         run: dart pub global activate very_good_cli
 
       - name: Run app tests only
-        run: dart pub global run very_good_cli:very_good test --recursive --coverage
+        run: dart pub global run very_good_cli:very_good test --recursive --coverage --no-optimization
         working-directory: app/
